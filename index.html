@@ -1884,15 +1884,87 @@ async function bootstrapStorage(){
     trackError('storage_bootstrap', e && e.message ? e.message : e);
   }
 }
+
+
+function exportDataCSV(){
+  const rows=[['date','nom','duree','volume_kg','sets','prs','note']];
+  DB.history.forEach(h=>rows.push([
+    h.date,
+    '"'+(h.name||'').replaceAll('"','""')+'"',
+    h.duration,
+    h.volume,
+    h.sets,
+    h.prs.length,
+    '"'+(h.note||'').replaceAll('"','""')+'"'
+  ]));
+  const csv=rows.map(r=>r.join(',')).join('\n');
+  const blob=new Blob([csv],{type:'text/csv;charset=utf-8;'});
+  const url=URL.createObjectURL(blob);
+  const a=document.createElement('a');a.href=url;a.download='liftr-history.csv';a.click();
+  URL.revokeObjectURL(url);showToast('Export CSV téléchargé ✓');
+}
+function triggerImportData(){ document.getElementById('import-json-input').click(); }
+function importDataFromFile(evt){
+  const file=evt.target.files?.[0];
+  if(!file) return;
+  const reader=new FileReader();
+  reader.onload=()=>{
+    try{
+      const parsed=JSON.parse(String(reader.result||'{}'));
+      if(!parsed || !Array.isArray(parsed.history) || !Array.isArray(parsed.programs)) throw new Error('format');
+      DB=parsed;
+      if(!Array.isArray(DB.customExercises)) DB.customExercises=[];
+      saveDB();
+      location.reload();
+    }catch(e){
+      showToast('Import invalide ✕');
+    }
+  };
+  reader.readAsText(file);
+  evt.target.value='';
+}
+async function scheduleWorkoutReminder(){
+  if(!('Notification' in window)){ showToast('Notifications non supportées'); return; }
+  let perm=Notification.permission;
+  if(perm==='default') perm=await Notification.requestPermission();
+  if(perm!=='granted'){ showToast('Permission notification refusée'); return; }
+  setTimeout(()=>new Notification('LIFTR', { body:'Il est temps de lancer ta séance 💪' }), 60*60*1000);
+  showToast('Rappel programmé dans 1h ✓');
+}
+function openCustomExerciseSheet(ctx){
+  customExCtx=ctx;
+  customExMuscle='Pectoraux';
+  document.getElementById('custom-ex-name').value='';
+  document.querySelectorAll('#custom-muscle-row .chip').forEach((c,i)=>c.classList.toggle('active',i===0));
+  openSheet('sheet-custom-ex');
+}
+function setCustomMuscle(muscle,btn){
+  customExMuscle=muscle;
+  document.querySelectorAll('#custom-muscle-row .chip').forEach(c=>c.classList.remove('active'));
+  btn.classList.add('active');
+}
+function saveCustomExercise(){
+  const name=(document.getElementById('custom-ex-name').value||'').trim();
+  if(!name){showToast('Nom requis');return;}
+  if(EXERCISE_DB.some(e=>e.name.toLowerCase()===name.toLowerCase())){showToast('Exercice déjà existant');return;}
+  const iconByMuscle={Pectoraux:'💪',Dos:'🔙',Épaules:'🏹',Jambes:'🦵',Bras:'💥',Core:'🔥'};
+  const bgByMuscle={Pectoraux:'bg-chest',Dos:'bg-back',Épaules:'bg-shoulders',Jambes:'bg-legs',Bras:'bg-arms',Core:'bg-core'};
+  const ex={name,muscle:customExMuscle,icon:iconByMuscle[customExMuscle]||'🏋️',bg:bgByMuscle[customExMuscle]||'bg-core'};
+  EXERCISE_DB.push(ex);
+  DB.customExercises.push(ex);
+  saveDB();
+  closeSheet('sheet-custom-ex');
+  renderExSheet(customExCtx);
+  showToast('Exercice personnalisé ajouté ✓');
+}
+
 // ═══════════════════════════════════════════════════════
 // INIT
 // ═══════════════════════════════════════════════════════
 renderHome();
 renderExSheet('wk');
 renderExSheet('prog');
-document.getElementById('toggle-errors')?.classList.toggle('on', DB.settings.errorTracking!==false);
-bootstrapStorage();
-if('serviceWorker' in navigator){navigator.serviceWorker.register('sw.js').catch((e)=>trackError('sw_register', e && e.message ? e.message : e));}
+if('serviceWorker' in navigator){navigator.serviceWorker.register('sw.js').catch(()=>{});}
 </script>
 </body>
 </html>

@@ -8,6 +8,7 @@
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
 <meta name="apple-mobile-web-app-title" content="LIFTR">
 <title>LIFTR — Workout Tracker</title>
+<link rel="manifest" href="manifest.webmanifest">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=Syne:wght@400;500;600;700;800&family=Geist+Mono:wght@300;400;500&display=swap" rel="stylesheet">
 <style>
@@ -614,13 +615,34 @@ input[type=number]{-moz-appearance:textfield;}
     </div>
     <div class="setting-row"><div><div class="setting-label">Vibration fin de repos</div></div><button class="toggle on" onclick="toggleSetting(this,'vibration')"></button></div>
     <div class="setting-row"><div><div class="setting-label">Son fin de repos</div></div><button class="toggle on" onclick="toggleSetting(this,'sound')"></button></div>
-    <div class="setting-row" style="border-bottom:none"><div><div class="setting-label">Timer auto au cochage</div></div><button class="toggle on" onclick="toggleSetting(this,'autorest')"></button></div>
+    <div class="setting-row"><div><div class="setting-label">Timer auto au cochage</div></div><button class="toggle on" onclick="toggleSetting(this,'autorest')"></button></div>
+    <div class="setting-row" style="border-bottom:none"><div><div class="setting-label">Suivi d'erreurs local</div><div class="setting-sub">Journalise les erreurs pour diagnostic</div></div><button class="toggle on" id="toggle-errors" onclick="toggleSetting(this,'errorTracking')"></button></div>
   </div>
   <div class="section-label fade-up d5">Données</div>
   <div class="card fade-up d5">
     <div class="action-row" onclick="exportData()">
       <div class="action-icon" style="background:rgba(100,180,255,.1)">📤</div>
-      <div style="flex:1"><div class="action-title">Exporter les données</div><div class="action-sub">Télécharger un fichier JSON</div></div>
+      <div style="flex:1"><div class="action-title">Exporter JSON</div><div class="action-sub">Télécharger la sauvegarde complète</div></div>
+      <span style="color:var(--muted)">›</span>
+    </div>
+    <div class="action-row" onclick="exportDataCSV()">
+      <div class="action-icon" style="background:rgba(200,240,96,.12)">📄</div>
+      <div style="flex:1"><div class="action-title">Exporter CSV</div><div class="action-sub">Historique des séances en CSV</div></div>
+      <span style="color:var(--muted)">›</span>
+    </div>
+    <div class="action-row" onclick="triggerImportData()">
+      <div class="action-icon" style="background:rgba(120,180,255,.12)">📥</div>
+      <div style="flex:1"><div class="action-title">Importer JSON</div><div class="action-sub">Restaurer une sauvegarde LIFTR</div></div>
+      <span style="color:var(--muted)">›</span>
+    </div>
+    <div class="action-row" onclick="exportErrorLogs()">
+      <div class="action-icon" style="background:rgba(255,120,120,.12)">🧾</div>
+      <div style="flex:1"><div class="action-title">Exporter journal d'erreurs</div><div class="action-sub">Diagnostic local JSON</div></div>
+      <span style="color:var(--muted)">›</span>
+    </div>
+    <div class="action-row" onclick="scheduleWorkoutReminder()">
+      <div class="action-icon" style="background:rgba(255,200,120,.12)">🔔</div>
+      <div style="flex:1"><div class="action-title">Rappel de séance</div><div class="action-sub">Planifier une notification locale dans 1h</div></div>
       <span style="color:var(--muted)">›</span>
     </div>
     <div class="action-row danger" onclick="openSheet('sheet-reset')">
@@ -762,6 +784,7 @@ input[type=number]{-moz-appearance:textfield;}
       <button class="chip" onclick="filterMuscleSheet('Core',this,'wk')">Core</button>
     </div>
     <div id="ex-list-wk"></div>
+    <button class="ghost-btn" onclick="openCustomExerciseSheet('wk')">+ Créer un exercice personnalisé</button>
   </div>
 </div>
 
@@ -781,6 +804,28 @@ input[type=number]{-moz-appearance:textfield;}
       <button class="chip" onclick="filterMuscleSheet('Core',this,'prog')">Core</button>
     </div>
     <div id="ex-list-prog"></div>
+    <button class="ghost-btn" onclick="openCustomExerciseSheet('prog')">+ Créer un exercice personnalisé</button>
+  </div>
+</div>
+
+
+<!-- Custom exercise -->
+<div class="sheet-backdrop" id="sheet-custom-ex" onclick="closeSheetOutside(event,'sheet-custom-ex')">
+  <div class="sheet">
+    <div class="sheet-handle"></div>
+    <div class="sheet-title">Créer un exercice</div>
+    <div class="field-label">Nom</div>
+    <input class="text-input" id="custom-ex-name" placeholder="ex: Pull-over câble">
+    <div class="field-label">Groupe musculaire</div>
+    <div class="chip-row" id="custom-muscle-row">
+      <button class="chip active" onclick="setCustomMuscle('Pectoraux',this)">Pectoraux</button>
+      <button class="chip" onclick="setCustomMuscle('Dos',this)">Dos</button>
+      <button class="chip" onclick="setCustomMuscle('Épaules',this)">Épaules</button>
+      <button class="chip" onclick="setCustomMuscle('Jambes',this)">Jambes</button>
+      <button class="chip" onclick="setCustomMuscle('Bras',this)">Bras</button>
+      <button class="chip" onclick="setCustomMuscle('Core',this)">Core</button>
+    </div>
+    <button class="primary-btn" onclick="saveCustomExercise()">Créer l'exercice</button>
   </div>
 </div>
 
@@ -853,7 +898,8 @@ input[type=number]{-moz-appearance:textfield;}
   <div class="sheet">
     <div class="sheet-handle"></div>
     <div class="sheet-title">Supprimer cette séance ?</div>
-    <div class="sheet-sub">Cette action est irréversible.</div>
+    <div class="sheet-sub">Cette action est irréversible. Tape <b>SUPPRIMER</b> pour confirmer.</div>
+    <input class="text-input" id="confirm-delete-hist-input" placeholder="SUPPRIMER">
     <button class="danger-btn" style="margin-top:0" onclick="confirmDeleteHist()">Supprimer</button>
     <button class="ghost-btn" onclick="closeSheet('sheet-delete-hist')">Annuler</button>
   </div>
@@ -864,15 +910,20 @@ input[type=number]{-moz-appearance:textfield;}
   <div class="sheet">
     <div class="sheet-handle"></div>
     <div class="sheet-title">Réinitialiser les données ?</div>
-    <div class="sheet-sub">Supprime définitivement tout l'historique, les statistiques et les métriques corporelles.<br><br><span style="color:var(--red)">⚠️ Cette action est irréversible.</span></div>
+    <div class="sheet-sub">Supprime définitivement tout l'historique, les statistiques et les métriques corporelles.<br><br><span style="color:var(--red)">⚠️ Cette action est irréversible.</span><br><br>Tape <b>RESET</b> pour confirmer.</div>
+    <input class="text-input" id="confirm-reset-input" placeholder="RESET">
     <button class="danger-btn" style="margin-top:0" onclick="confirmReset()">Tout supprimer</button>
     <button class="ghost-btn" onclick="closeSheet('sheet-reset')">Annuler</button>
   </div>
 </div>
 
+<input type="file" id="import-json-input" accept="application/json" style="display:none" onchange="importDataFromFile(event)">
+
 <!-- Toast -->
 <div class="toast" id="toast"></div>
 
+<script src="src/calculations.js"></script>
+<script src="src/storage.js"></script>
 <script>
 // ═══════════════════════════════════════════════════════
 // DATABASE (localStorage-backed)
@@ -881,7 +932,7 @@ const STORE_KEY = 'liftr_v1';
 
 const DEFAULT_DB = {
   profile: { name:'Jean Dupont', initials:'JD', age:26, poids:78, taille:178, objectif:'Prise de masse', since:'janvier 2025' },
-  settings: { restDefault:90, unit:'kg', vibration:true, sound:true, autorest:true },
+  settings: { restDefault:90, unit:'kg', vibration:true, sound:true, autorest:true, errorTracking:true },
   metrics: {
     poids:       { unit:'kg',  label:'Poids',          vals:[80.2,79.8,79.4,79.0,78.8,78.6,78.4,78.2] },
     tour_taille: { unit:'cm',  label:'Tour de taille',  vals:[86,85.5,85,84.5,84,83.5,83,82.5] },
@@ -920,6 +971,7 @@ const DEFAULT_DB = {
     {name:'Presse militaire',val:'42.5 kg',date:'2 mars',icon:'🏹'},
     {name:'Tractions lestées',val:'+22.5 kg',date:'2 mars',icon:'🔝'},
   ],
+  customExercises: [],
 };
 
 // Load or init DB
@@ -933,7 +985,10 @@ try {
 
 function saveDB() {
   try { localStorage.setItem(STORE_KEY, JSON.stringify(DB)); } catch(e) {}
+  if(window.StorageEngine){ StorageEngine.persist(STORE_KEY, DB); }
 }
+
+if(!Array.isArray(DB.customExercises)) DB.customExercises=[];
 
 // ═══════════════════════════════════════════════════════
 // EXERCISE DATABASE
@@ -965,6 +1020,11 @@ const EXERCISE_DB = [
   {name:'Planche',muscle:'Core',icon:'🏄',bg:'bg-core'},
   {name:'Ab wheel',muscle:'Core',icon:'⭕',bg:'bg-core'},
 ];
+DB.customExercises.forEach(ex=>{
+  if(!EXERCISE_DB.some(e=>e.name===ex.name)){
+    EXERCISE_DB.push(ex);
+  }
+});
 
 // ═══════════════════════════════════════════════════════
 // HELPERS
@@ -1052,21 +1112,11 @@ function renderHome() {
 }
 
 function calcStreak() {
-  if(!DB.history.length) return 0;
-  const dates = [...new Set(DB.history.map(h=>h.date))].sort().reverse();
-  let streak=0, cur=new Date(); cur.setHours(0,0,0,0);
-  for(const d of dates) {
-    const hd=new Date(d); hd.setHours(0,0,0,0);
-    const diff=(cur-hd)/86400000;
-    if(diff<=1){ streak++; cur=hd; } else break;
-  }
-  return streak;
+  return window.LiftrCalc ? LiftrCalc.calculateStreak(DB.history) : 0;
 }
 
 function calcWeekVolume() {
-  const now=new Date(); const todayIdx=todayDayIdx();
-  const startOfWeek=new Date(now); startOfWeek.setDate(now.getDate()-todayIdx); startOfWeek.setHours(0,0,0,0);
-  return DB.history.filter(h=>new Date(h.date)>=startOfWeek).reduce((a,h)=>a+h.volume,0);
+  return window.LiftrCalc ? LiftrCalc.calculateWeekVolume(DB.history) : 0;
 }
 
 function startTodayWorkout() {
@@ -1522,8 +1572,11 @@ function closeHistDetail(){document.getElementById('hist-detail').classList.remo
 function saveHistNote(id,val){const h=DB.history.find(x=>x.id===id);if(h){h.note=val;saveDB();}}
 function openSheet_deleteHist(){openSheet('sheet-delete-hist');}
 function confirmDeleteHist(){
+  const token=(document.getElementById('confirm-delete-hist-input').value||'').trim().toUpperCase();
+  if(token!=='SUPPRIMER'){ showToast('Tape SUPPRIMER pour confirmer'); return; }
   DB.history=DB.history.filter(x=>x.id!==currentHistId);
-  saveDB(); closeSheet('sheet-delete-hist'); closeHistDetail(); renderHistory(); showToast('Séance supprimée');
+  document.getElementById('confirm-delete-hist-input').value='';
+  saveDB(); closeSheet('sheet-delete-hist'); closeHistDetail(); renderHistory(); renderHome(); renderStats(); showToast('Séance supprimée');
 }
 function relanceWorkout(){
   const h=DB.history.find(x=>x.id===currentHistId);
@@ -1611,6 +1664,7 @@ function renderPRList(){
 // PROFILE
 // ═══════════════════════════════════════════════════════
 let currentMetric='poids', editingFieldKey=null;
+let customExCtx='wk', customExMuscle='Pectoraux';
 
 function renderProfile(){
   document.getElementById('profile-name-display').textContent=DB.profile.name;
@@ -1708,17 +1762,137 @@ function exportData(){
   URL.revokeObjectURL(url);showToast('Export téléchargé ✓');
 }
 function confirmReset(){
+  const token=(document.getElementById('confirm-reset-input').value||'').trim().toUpperCase();
+  if(token!=='RESET'){ showToast('Tape RESET pour confirmer'); return; }
   const fresh=JSON.parse(JSON.stringify(DEFAULT_DB));
-  DB.history=[]; DB.metrics=fresh.metrics;
-  saveDB(); closeSheet('sheet-reset'); renderProfile(); showToast('Données réinitialisées');
+  DB.history=[]; DB.metrics=fresh.metrics; DB.prs=[]; DB.customExercises=[];
+  document.getElementById('confirm-reset-input').value='';
+  saveDB(); closeSheet('sheet-reset'); renderProfile(); renderHistory(); renderStats(); renderHome(); showToast('Données réinitialisées');
 }
 
+
+function exportDataCSV(){
+  const rows=[['date','nom','duree','volume_kg','sets','prs','note']];
+  DB.history.forEach(h=>rows.push([
+    h.date,
+    '"'+(h.name||'').replaceAll('"','""')+'"',
+    h.duration,
+    h.volume,
+    h.sets,
+    h.prs.length,
+    '"'+(h.note||'').replaceAll('"','""')+'"'
+  ]));
+  const csv=rows.map(r=>r.join(',')).join('\n');
+  const blob=new Blob([csv],{type:'text/csv;charset=utf-8;'});
+  const url=URL.createObjectURL(blob);
+  const a=document.createElement('a');a.href=url;a.download='liftr-history.csv';a.click();
+  URL.revokeObjectURL(url);showToast('Export CSV téléchargé ✓');
+}
+function triggerImportData(){ document.getElementById('import-json-input').click(); }
+function importDataFromFile(evt){
+  const file=evt.target.files?.[0];
+  if(!file) return;
+  const reader=new FileReader();
+  reader.onload=()=>{
+    try{
+      const parsed=JSON.parse(String(reader.result||'{}'));
+      if(!parsed || !Array.isArray(parsed.history) || !Array.isArray(parsed.programs)) throw new Error('format');
+      DB=parsed;
+      if(!Array.isArray(DB.customExercises)) DB.customExercises=[];
+      saveDB();
+      location.reload();
+    }catch(e){
+      showToast('Import invalide ✕');
+    }
+  };
+  reader.readAsText(file);
+  evt.target.value='';
+}
+async function scheduleWorkoutReminder(){
+  if(!('Notification' in window)){ showToast('Notifications non supportées'); return; }
+  let perm=Notification.permission;
+  if(perm==='default') perm=await Notification.requestPermission();
+  if(perm!=='granted'){ showToast('Permission notification refusée'); return; }
+  if(navigator.serviceWorker && navigator.serviceWorker.ready){
+    navigator.serviceWorker.ready.then(reg=>{
+      setTimeout(()=>{
+        if(reg.showNotification){ reg.showNotification('LIFTR', { body:'Il est temps de lancer ta séance 💪', icon:'assets/icons/icon-192.svg' }); }
+        else { new Notification('LIFTR', { body:'Il est temps de lancer ta séance 💪' }); }
+      }, 60*60*1000);
+    });
+  } else {
+    setTimeout(()=>new Notification('LIFTR', { body:'Il est temps de lancer ta séance 💪' }), 60*60*1000);
+  }
+  showToast('Rappel programmé dans 1h ✓');
+}
+function openCustomExerciseSheet(ctx){
+  customExCtx=ctx;
+  customExMuscle='Pectoraux';
+  document.getElementById('custom-ex-name').value='';
+  document.querySelectorAll('#custom-muscle-row .chip').forEach((c,i)=>c.classList.toggle('active',i===0));
+  openSheet('sheet-custom-ex');
+}
+function setCustomMuscle(muscle,btn){
+  customExMuscle=muscle;
+  document.querySelectorAll('#custom-muscle-row .chip').forEach(c=>c.classList.remove('active'));
+  btn.classList.add('active');
+}
+function saveCustomExercise(){
+  const name=(document.getElementById('custom-ex-name').value||'').trim();
+  if(!name){showToast('Nom requis');return;}
+  if(EXERCISE_DB.some(e=>e.name.toLowerCase()===name.toLowerCase())){showToast('Exercice déjà existant');return;}
+  const iconByMuscle={Pectoraux:'💪',Dos:'🔙',Épaules:'🏹',Jambes:'🦵',Bras:'💥',Core:'🔥'};
+  const bgByMuscle={Pectoraux:'bg-chest',Dos:'bg-back',Épaules:'bg-shoulders',Jambes:'bg-legs',Bras:'bg-arms',Core:'bg-core'};
+  const ex={name,muscle:customExMuscle,icon:iconByMuscle[customExMuscle]||'🏋️',bg:bgByMuscle[customExMuscle]||'bg-core'};
+  EXERCISE_DB.push(ex);
+  DB.customExercises.push(ex);
+  saveDB();
+  closeSheet('sheet-custom-ex');
+  renderExSheet(customExCtx);
+  showToast('Exercice personnalisé ajouté ✓');
+}
+
+
+function exportErrorLogs(){
+  const logs = JSON.parse(localStorage.getItem('liftr_errors') || '[]');
+  const blob = new Blob([JSON.stringify(logs, null, 2)], {type:'application/json'});
+  const url = URL.createObjectURL(blob);
+  const a=document.createElement('a');a.href=url;a.download='liftr-errors.json';a.click();
+  URL.revokeObjectURL(url);
+  showToast('Journal d'erreurs exporté ✓');
+}
+function trackError(kind, payload){
+  if(!DB?.settings?.errorTracking) return;
+  const logs = JSON.parse(localStorage.getItem('liftr_errors') || '[]');
+  logs.unshift({ ts:new Date().toISOString(), kind, payload:String(payload||'').slice(0,500) });
+  localStorage.setItem('liftr_errors', JSON.stringify(logs.slice(0,100)));
+}
+window.addEventListener('error', e => trackError('error', e.message));
+window.addEventListener('unhandledrejection', e => trackError('promise', e.reason));
+
+async function bootstrapStorage(){
+  if(!window.StorageEngine) return;
+  try{
+    DB = await StorageEngine.bootstrap(STORE_KEY, DEFAULT_DB);
+    if(!Array.isArray(DB.customExercises)) DB.customExercises = [];
+    renderHome();
+    renderProgList();
+    renderHistory();
+    renderStats();
+    renderProfile();
+  }catch(e){
+    trackError('storage_bootstrap', e && e.message ? e.message : e);
+  }
+}
 // ═══════════════════════════════════════════════════════
 // INIT
 // ═══════════════════════════════════════════════════════
 renderHome();
 renderExSheet('wk');
 renderExSheet('prog');
+document.getElementById('toggle-errors')?.classList.toggle('on', DB.settings.errorTracking!==false);
+bootstrapStorage();
+if('serviceWorker' in navigator){navigator.serviceWorker.register('sw.js').catch((e)=>trackError('sw_register', e && e.message ? e.message : e));}
 </script>
 </body>
 </html>

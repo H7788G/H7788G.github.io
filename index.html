@@ -8,6 +8,7 @@
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
 <meta name="apple-mobile-web-app-title" content="LIFTR">
 <title>LIFTR — Workout Tracker</title>
+<link rel="manifest" href="manifest.webmanifest">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=Syne:wght@400;500;600;700;800&family=Geist+Mono:wght@300;400;500&display=swap" rel="stylesheet">
 <style>
@@ -620,7 +621,22 @@ input[type=number]{-moz-appearance:textfield;}
   <div class="card fade-up d5">
     <div class="action-row" onclick="exportData()">
       <div class="action-icon" style="background:rgba(100,180,255,.1)">📤</div>
-      <div style="flex:1"><div class="action-title">Exporter les données</div><div class="action-sub">Télécharger un fichier JSON</div></div>
+      <div style="flex:1"><div class="action-title">Exporter JSON</div><div class="action-sub">Télécharger la sauvegarde complète</div></div>
+      <span style="color:var(--muted)">›</span>
+    </div>
+    <div class="action-row" onclick="exportDataCSV()">
+      <div class="action-icon" style="background:rgba(200,240,96,.12)">📄</div>
+      <div style="flex:1"><div class="action-title">Exporter CSV</div><div class="action-sub">Historique des séances en CSV</div></div>
+      <span style="color:var(--muted)">›</span>
+    </div>
+    <div class="action-row" onclick="triggerImportData()">
+      <div class="action-icon" style="background:rgba(120,180,255,.12)">📥</div>
+      <div style="flex:1"><div class="action-title">Importer JSON</div><div class="action-sub">Restaurer une sauvegarde LIFTR</div></div>
+      <span style="color:var(--muted)">›</span>
+    </div>
+    <div class="action-row" onclick="scheduleWorkoutReminder()">
+      <div class="action-icon" style="background:rgba(255,200,120,.12)">🔔</div>
+      <div style="flex:1"><div class="action-title">Rappel de séance</div><div class="action-sub">Planifier une notification locale dans 1h</div></div>
       <span style="color:var(--muted)">›</span>
     </div>
     <div class="action-row danger" onclick="openSheet('sheet-reset')">
@@ -762,6 +778,7 @@ input[type=number]{-moz-appearance:textfield;}
       <button class="chip" onclick="filterMuscleSheet('Core',this,'wk')">Core</button>
     </div>
     <div id="ex-list-wk"></div>
+    <button class="ghost-btn" onclick="openCustomExerciseSheet('wk')">+ Créer un exercice personnalisé</button>
   </div>
 </div>
 
@@ -781,6 +798,28 @@ input[type=number]{-moz-appearance:textfield;}
       <button class="chip" onclick="filterMuscleSheet('Core',this,'prog')">Core</button>
     </div>
     <div id="ex-list-prog"></div>
+    <button class="ghost-btn" onclick="openCustomExerciseSheet('prog')">+ Créer un exercice personnalisé</button>
+  </div>
+</div>
+
+
+<!-- Custom exercise -->
+<div class="sheet-backdrop" id="sheet-custom-ex" onclick="closeSheetOutside(event,'sheet-custom-ex')">
+  <div class="sheet">
+    <div class="sheet-handle"></div>
+    <div class="sheet-title">Créer un exercice</div>
+    <div class="field-label">Nom</div>
+    <input class="text-input" id="custom-ex-name" placeholder="ex: Pull-over câble">
+    <div class="field-label">Groupe musculaire</div>
+    <div class="chip-row" id="custom-muscle-row">
+      <button class="chip active" onclick="setCustomMuscle('Pectoraux',this)">Pectoraux</button>
+      <button class="chip" onclick="setCustomMuscle('Dos',this)">Dos</button>
+      <button class="chip" onclick="setCustomMuscle('Épaules',this)">Épaules</button>
+      <button class="chip" onclick="setCustomMuscle('Jambes',this)">Jambes</button>
+      <button class="chip" onclick="setCustomMuscle('Bras',this)">Bras</button>
+      <button class="chip" onclick="setCustomMuscle('Core',this)">Core</button>
+    </div>
+    <button class="primary-btn" onclick="saveCustomExercise()">Créer l'exercice</button>
   </div>
 </div>
 
@@ -870,6 +909,8 @@ input[type=number]{-moz-appearance:textfield;}
   </div>
 </div>
 
+<input type="file" id="import-json-input" accept="application/json" style="display:none" onchange="importDataFromFile(event)">
+
 <!-- Toast -->
 <div class="toast" id="toast"></div>
 
@@ -920,6 +961,7 @@ const DEFAULT_DB = {
     {name:'Presse militaire',val:'42.5 kg',date:'2 mars',icon:'🏹'},
     {name:'Tractions lestées',val:'+22.5 kg',date:'2 mars',icon:'🔝'},
   ],
+  customExercises: [],
 };
 
 // Load or init DB
@@ -934,6 +976,8 @@ try {
 function saveDB() {
   try { localStorage.setItem(STORE_KEY, JSON.stringify(DB)); } catch(e) {}
 }
+
+if(!Array.isArray(DB.customExercises)) DB.customExercises=[];
 
 // ═══════════════════════════════════════════════════════
 // EXERCISE DATABASE
@@ -965,6 +1009,11 @@ const EXERCISE_DB = [
   {name:'Planche',muscle:'Core',icon:'🏄',bg:'bg-core'},
   {name:'Ab wheel',muscle:'Core',icon:'⭕',bg:'bg-core'},
 ];
+DB.customExercises.forEach(ex=>{
+  if(!EXERCISE_DB.some(e=>e.name===ex.name)){
+    EXERCISE_DB.push(ex);
+  }
+});
 
 // ═══════════════════════════════════════════════════════
 // HELPERS
@@ -1611,6 +1660,7 @@ function renderPRList(){
 // PROFILE
 // ═══════════════════════════════════════════════════════
 let currentMetric='poids', editingFieldKey=null;
+let customExCtx='wk', customExMuscle='Pectoraux';
 
 function renderProfile(){
   document.getElementById('profile-name-display').textContent=DB.profile.name;
@@ -1713,12 +1763,86 @@ function confirmReset(){
   saveDB(); closeSheet('sheet-reset'); renderProfile(); showToast('Données réinitialisées');
 }
 
+
+function exportDataCSV(){
+  const rows=[['date','nom','duree','volume_kg','sets','prs','note']];
+  DB.history.forEach(h=>rows.push([
+    h.date,
+    '"'+(h.name||'').replaceAll('"','""')+'"',
+    h.duration,
+    h.volume,
+    h.sets,
+    h.prs.length,
+    '"'+(h.note||'').replaceAll('"','""')+'"'
+  ]));
+  const csv=rows.map(r=>r.join(',')).join('\n');
+  const blob=new Blob([csv],{type:'text/csv;charset=utf-8;'});
+  const url=URL.createObjectURL(blob);
+  const a=document.createElement('a');a.href=url;a.download='liftr-history.csv';a.click();
+  URL.revokeObjectURL(url);showToast('Export CSV téléchargé ✓');
+}
+function triggerImportData(){ document.getElementById('import-json-input').click(); }
+function importDataFromFile(evt){
+  const file=evt.target.files?.[0];
+  if(!file) return;
+  const reader=new FileReader();
+  reader.onload=()=>{
+    try{
+      const parsed=JSON.parse(String(reader.result||'{}'));
+      if(!parsed || !Array.isArray(parsed.history) || !Array.isArray(parsed.programs)) throw new Error('format');
+      DB=parsed;
+      if(!Array.isArray(DB.customExercises)) DB.customExercises=[];
+      saveDB();
+      location.reload();
+    }catch(e){
+      showToast('Import invalide ✕');
+    }
+  };
+  reader.readAsText(file);
+  evt.target.value='';
+}
+async function scheduleWorkoutReminder(){
+  if(!('Notification' in window)){ showToast('Notifications non supportées'); return; }
+  let perm=Notification.permission;
+  if(perm==='default') perm=await Notification.requestPermission();
+  if(perm!=='granted'){ showToast('Permission notification refusée'); return; }
+  setTimeout(()=>new Notification('LIFTR', { body:'Il est temps de lancer ta séance 💪' }), 60*60*1000);
+  showToast('Rappel programmé dans 1h ✓');
+}
+function openCustomExerciseSheet(ctx){
+  customExCtx=ctx;
+  customExMuscle='Pectoraux';
+  document.getElementById('custom-ex-name').value='';
+  document.querySelectorAll('#custom-muscle-row .chip').forEach((c,i)=>c.classList.toggle('active',i===0));
+  openSheet('sheet-custom-ex');
+}
+function setCustomMuscle(muscle,btn){
+  customExMuscle=muscle;
+  document.querySelectorAll('#custom-muscle-row .chip').forEach(c=>c.classList.remove('active'));
+  btn.classList.add('active');
+}
+function saveCustomExercise(){
+  const name=(document.getElementById('custom-ex-name').value||'').trim();
+  if(!name){showToast('Nom requis');return;}
+  if(EXERCISE_DB.some(e=>e.name.toLowerCase()===name.toLowerCase())){showToast('Exercice déjà existant');return;}
+  const iconByMuscle={Pectoraux:'💪',Dos:'🔙',Épaules:'🏹',Jambes:'🦵',Bras:'💥',Core:'🔥'};
+  const bgByMuscle={Pectoraux:'bg-chest',Dos:'bg-back',Épaules:'bg-shoulders',Jambes:'bg-legs',Bras:'bg-arms',Core:'bg-core'};
+  const ex={name,muscle:customExMuscle,icon:iconByMuscle[customExMuscle]||'🏋️',bg:bgByMuscle[customExMuscle]||'bg-core'};
+  EXERCISE_DB.push(ex);
+  DB.customExercises.push(ex);
+  saveDB();
+  closeSheet('sheet-custom-ex');
+  renderExSheet(customExCtx);
+  showToast('Exercice personnalisé ajouté ✓');
+}
+
 // ═══════════════════════════════════════════════════════
 // INIT
 // ═══════════════════════════════════════════════════════
 renderHome();
 renderExSheet('wk');
 renderExSheet('prog');
+if('serviceWorker' in navigator){navigator.serviceWorker.register('sw.js').catch(()=>{});}
 </script>
 </body>
 </html>
